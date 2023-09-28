@@ -7,7 +7,7 @@ import dbClient from '../utils/db';
 import { getIdAndKey, isValidUser } from '../utils/users';
 
 class FilesController {
-  static async postUpload (request, response) {
+  static async postUpload(request, response) {
     const fileQ = new Queue('fileQ');
     const dir = process.env.FOLDER_PATH || '/tmp/files_manager';
 
@@ -88,7 +88,7 @@ class FilesController {
     });
   }
 
-  static async getShow (request, response) {
+  static async getShow(request, response) {
     const { userId } = await getIdAndKey(request);
     if (!isValidUser(userId)) return response.status(401).send({ error: 'Unauthorized' });
 
@@ -109,7 +109,7 @@ class FilesController {
     });
   }
 
-  static async getIndex (request, response) {
+  static async getIndex(request, response) {
     const { userId } = await getIdAndKey(request);
     if (!isValidUser(userId)) return response.status(401).send({ error: 'Unauthorized' });
 
@@ -129,29 +129,41 @@ class FilesController {
 
     const page = request.query.page || 0;
 
-    const agg = { $and: [{ parentId }] };
-    let aggData = [{ $match: agg }, { $skip: page * 20 }, { $limit: 20 }];
-    if (parentId === 0) aggData = [{ $skip: page * 20 }, { $limit: 20 }];
+    const pageSize = 20;
+    const skip = page * pageSize;
 
-    const pageFiles = await dbClient.files.aggregate(aggData);
-    const files = [];
+    const agg = [
+      {
+        $match: {
+          parentId
+        }
+      },
+      {
+        $skip: skip
+      },
+      {
+        $limit: pageSize
+      }
+    ];
 
-    await pageFiles.forEach((file) => {
-      const fileObj = {
-        id: file._id,
-        userId: file.userId,
-        name: file.name,
-        type: file.type,
-        isPublic: file.isPublic,
-        parentId: file.parentId
-      };
-      files.push(fileObj);
-    });
+    if (parentId === 0) {
+      agg.shift(); // Remove the $match stage for parentId
+    }
+
+    const pageFiles = await dbClient.files.aggregate(agg);
+    const files = pageFiles.map(file => ({
+      id: file._id,
+      userId: file.userId,
+      name: file.name,
+      type: file.type,
+      isPublic: file.isPublic,
+      parentId: file.parentId
+    }));
 
     return response.status(200).send(files);
   }
 
-  static async putPublish (request, response) {
+  static async putPublish(request, response) {
     const { userId } = await getIdAndKey(request);
     if (!isValidUser(userId)) return response.status(401).send({ error: 'Unauthorized' });
 
@@ -176,7 +188,7 @@ class FilesController {
     });
   }
 
-  static async putUnpublish (request, response) {
+  static async putUnpublish(request, response) {
     const { userId } = await getIdAndKey(request);
     if (!isValidUser(userId)) return response.status(401).send({ error: 'Unauthorized' });
 
@@ -201,7 +213,7 @@ class FilesController {
     });
   }
 
-  static async getFile (request, response) {
+  static async getFile(request, response) {
     const fileId = request.params.id || '';
     const size = request.query.size || 0;
 
@@ -213,7 +225,7 @@ class FilesController {
     const { userId: user } = await getIdAndKey(request);
 
     if ((!isPublic && !user) || (user && userId.toString() !== user && !isPublic)) return response.status(404).send({ error: 'Not found' });
-    if (type === 'folder') return response.status(400).send({ error: 'A folder doesn\'t have content' });
+    if (type === 'folder') return response.status(400).send({ error: "A folder doesn't have content" });
 
     const path = size === 0 ? file.localPath : `${file.localPath}_${size}`;
 
